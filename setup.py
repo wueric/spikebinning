@@ -87,7 +87,7 @@ class BuildExt(build_ext):
 
 ext_modules = [
     Extension(
-        'spikebinning',
+        'spikebinning.spikebinning_cpplib',
         ['spikebinning/spikebinning_cpplib/spikebinning_pbind.cpp', ],
         include_dirs=[
             get_pybind_include(),
@@ -97,12 +97,16 @@ ext_modules = [
     ),
 ]
 
+py_modules = [
+    'spikebinning',
+]
+
 setup(
     name='spikebinning',
     version=__version__,
     author='Eric Wu',
     ext_modules=ext_modules,
-    packages=['spikebinning', ],
+    packages=py_modules,
     install_requires=['pybind11>=2.3', 'numpy'],
     setup_requires=['pybind11>=2.3'],
     cmdclass={'build_ext': BuildExt},

@@ -76,10 +76,10 @@ int64_t binary_search_index(
             return idx;
         } else if (value > time) {
             high = idx - 1;
-            idx = ((high - low) >> 1) + low
+            idx = ((high - low) >> 1) + low;
         } else {
             low = idx + 1;
-            idx = ((high - low) >> 1) + low
+            idx = ((high - low) >> 1) + low;
         }
     }
 
