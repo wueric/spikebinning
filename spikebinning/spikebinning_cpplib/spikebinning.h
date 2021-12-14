@@ -8,6 +8,19 @@
 #include "MergeWrapper.h"
 #include "NDArrayWrapper.h"
 
+#if defined(ENABLE_OPENMP)
+#include <omp.h>
+#else
+typedef int omp_int_t;
+
+inline omp_int_t omp_get_thread_num() { return 0; }
+
+inline omp_int_t omp_get_max_threads() { return 1; }
+
+inline void omp_set_num_threads(int num_threads) { return; }
+
+#endif
+
 namespace py=pybind11;
 
 template<class T>
@@ -129,6 +142,8 @@ ContigNPArray<int64_t> bin_spikes_trials(
      * Algorithm: loop over each cell
      * For each trial, bin the spikes
      */
+    omp_set_num_threads(8);
+    #pragma omp parallel for
     for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
 
         py::object cell_id_pykey = cell_order[cell_idx];
@@ -141,8 +156,10 @@ ContigNPArray<int64_t> bin_spikes_trials(
                 static_cast<int64_t *>(spike_time_info.ptr),
                 {spike_time_info.shape[0]});
 
-        int64_t spike_offset = 0;
-        for (int64_t trial_idx = 0; trial_idx < n_trials; ++trial_idx) {
+        int64_t trial_idx = 0;
+        int64_t spike_offset = binary_search_index<int64_t>(spike_time_wrapper,
+                                                            bin_time_wrapper.valueAt(cell_id, trial_idx));
+        for (; trial_idx < n_trials; ++trial_idx) {
 
             CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> output_bin_wrapper = output_wrapper.slice<1>(
                     CNDArrayWrapper::makeIdxSlice(trial_idx),
@@ -208,6 +225,8 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
      * Algorithm: loop over each cell
      * For each trial, bin the spikes
      */
+    omp_set_num_threads(8);
+    #pragma omp parallel for
     for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
 
         py::object cell_id_pykey = cell_order[cell_idx];
@@ -220,8 +239,11 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
                 static_cast<int64_t *>(spike_time_info.ptr),
                 {spike_time_info.shape[0]});
 
-        int64_t spike_offset = 0;
-        for (int64_t trial_idx = 0; trial_idx < n_trials; ++trial_idx) {
+        int64_t trial_idx = 0;
+        int64_t spike_offset = binary_search_index<int64_t>(spike_time_wrapper,
+                                                            bin_time_wrapper.valueAt(cell_id, trial_idx));
+
+        for (; trial_idx < n_trials; ++trial_idx) {
 
             CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> output_bin_wrapper = output_wrapper.slice<1>(
                     CNDArrayWrapper::makeIdxSlice(trial_idx),
@@ -282,6 +304,8 @@ ContigNPArray <int64_t> bin_spikes_movie(
 
     // loop over the cells
     // within each loop bin spikes for the corresponding cell
+    omp_set_num_threads(8);
+    #pragma omp parallel for
     for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
 
         py::object cell_id_pykey = cell_order[cell_idx];
