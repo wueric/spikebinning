@@ -8,19 +8,6 @@
 #include "MergeWrapper.h"
 #include "NDArrayWrapper.h"
 
-#if defined(ENABLE_OPENMP)
-#include <omp.h>
-#else
-typedef int omp_int_t;
-
-inline omp_int_t omp_get_thread_num() { return 0; }
-
-inline omp_int_t omp_get_max_threads() { return 1; }
-
-inline void omp_set_num_threads(int num_threads) { return; }
-
-#endif
-
 namespace py=pybind11;
 
 template<class T>
@@ -126,8 +113,8 @@ ContigNPArray<int64_t> bin_spikes_trials(
             sizeof(int64_t),     /* Size of one item */
             py::format_descriptor<int64_t>::value, /* Buffer format */
             3,          /* How many dimensions? */
-            {n_cells, n_trials, n_bins}, /* Number of elements for each dimension */
-            {sizeof(int64_t) * n_bins * n_trials, sizeof(int64_t) * n_bins, sizeof(int64_t)}  /* Strides for each dim */
+            {n_trials, n_cells, n_bins}, /* Number of elements for each dimension */
+            {sizeof(int64_t) * n_bins * n_cells, sizeof(int64_t) * n_bins, sizeof(int64_t)}  /* Strides for each dim */
     );
 
     ContigNPArray <int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
@@ -142,8 +129,6 @@ ContigNPArray<int64_t> bin_spikes_trials(
      * Algorithm: loop over each cell
      * For each trial, bin the spikes
      */
-    //omp_set_num_threads(8);
-    //#pragma omp parallel for
     for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
 
         py::object cell_id_pykey = cell_order[cell_idx];
@@ -209,8 +194,8 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
             sizeof(int64_t),     /* Size of one item */
             py::format_descriptor<int64_t>::value, /* Buffer format */
             3,          /* How many dimensions? */
-            {n_cells, n_trials, n_bins}, /* Number of elements for each dimension */
-            {sizeof(int64_t) * n_bins * n_trials, sizeof(int64_t) * n_bins, sizeof(int64_t)}  /* Strides for each dim */
+            {n_trials, n_cells, n_bins}, /* Number of elements for each dimension */
+            {sizeof(int64_t) * n_bins * n_cells, sizeof(int64_t) * n_bins, sizeof(int64_t)}  /* Strides for each dim */
     );
 
     ContigNPArray <int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
@@ -225,8 +210,6 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
      * Algorithm: loop over each cell
      * For each trial, bin the spikes
      */
-    //omp_set_num_threads(8);
-    //#pragma omp parallel for
     for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
 
         py::object cell_id_pykey = cell_order[cell_idx];
@@ -304,8 +287,6 @@ ContigNPArray <int64_t> bin_spikes_movie(
 
     // loop over the cells
     // within each loop bin spikes for the corresponding cell
-    //omp_set_num_threads(8);
-    //#pragma omp parallel for
     for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
 
         py::object cell_id_pykey = cell_order[cell_idx];
