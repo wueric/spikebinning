@@ -155,7 +155,7 @@ ContigNPArray<int64_t> bin_spikes_trials(
                     CNDArrayWrapper::makeIdxSlice(trial_idx),
                     CNDArrayWrapper::makeAllSlice());
 
-            int64_t trial_bin_start = bin_time_wrapper.valueAt(cell_idx, trial_idx);
+            int64_t trial_bin_start = bin_time_wrapper.valueAt(trial_idx, 0);
             spike_offset = binary_search_index<int64_t>(spike_time_wrapper, trial_bin_start);
 
             spike_offset = bin_spikes_single_cell(spike_time_wrapper, output_bin_wrapper,
@@ -225,7 +225,6 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
         int64_t trial_idx = 0;
         int64_t spike_offset = binary_search_index<int64_t>(spike_time_wrapper,
                                                             bin_time_wrapper.valueAt(trial_idx, 0));
-
         for (; trial_idx < n_trials; ++trial_idx) {
 
             CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> output_bin_wrapper = output_wrapper.slice<1>(
@@ -237,7 +236,7 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
                     CNDArrayWrapper::makeIdxSlice(trial_idx),
                     CNDArrayWrapper::makeAllSlice());
 
-            int64_t trial_bin_start = bin_time_wrapper.valueAt(cell_idx, trial_idx);
+            int64_t trial_bin_start = bin_time_wrapper.valueAt(trial_idx, 0);
             spike_offset = search_index_backward<int64_t>(spike_time_wrapper, trial_bin_start, spike_offset);
 
             spike_offset = bin_spikes_single_cell(spike_time_wrapper, output_bin_wrapper,
