@@ -5,6 +5,8 @@
 #ifndef RECONSTRUCTION_V2_MERGEWRAPPER_H
 #define RECONSTRUCTION_V2_MERGEWRAPPER_H
 
+#include <limits>
+
 template<class T>
 struct MergeWrapper {
     T *base_ptr;
@@ -26,8 +28,14 @@ struct MergeWrapper {
     bool atEnd() const {return curr_ix == dim0;}
 
     void increment() {
+
         ++curr_ix;
-        priority = *(base_ptr + curr_ix);
+
+        if (atEnd()) {
+            priority = std::numeric_limits<T>::min();
+        } else {
+            -priority = *(base_ptr + curr_ix);
+        }
     }
 
     friend bool operator< (MergeWrapper<T> const& lhs, MergeWrapper<T> const& rhs) {

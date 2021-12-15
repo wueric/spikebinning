@@ -18,7 +18,22 @@ int64_t bin_spikes_single_cell(
         CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> &spike_time_buffer,
         CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> &bin_write_buffer,
         CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> &bin_cutoff_times,
-        int64_t offset_below) {
+        int64_t offset_below_idx) {
+
+    /*
+     * Bins spikes for a cell whose spike times are contained in spike_time_buffer
+     *      according to bin edge times in bin_cutoff_times. Binned spikes are written
+     *      into bin_write_buffer
+     *
+     * All times are in units of samples
+     *
+     * @param spike_time_buffer: wrapper on an array of shape (n_spikes, )
+     * @param bin_write_buffer: wrapper on an array of shape (n_bins, )
+     * @param bin_cutoff_times: wrapper on an array of shape (n_bins + 1, )
+     * @param offset_below: integer index into spike_time_buffer, corresponding to the
+     *      index of any spike either at or earlier than the first spike that needs
+     *      to be binned
+     */
 
     const int64_t n_bin_edges = bin_cutoff_times.shape[0];
     const int64_t n_spikes_total = spike_time_buffer.shape[0];
@@ -28,14 +43,18 @@ int64_t bin_spikes_single_cell(
         int64_t end = bin_cutoff_times.valueAt(i + 1);
 
         int64_t n_spikes_in_bin = 0;
-        while (offset_below < n_spikes_total && spike_time_buffer.valueAt(offset_below) < start) ++offset_below;
-        while (offset_below < n_spikes_total && spike_time_buffer.valueAt(offset_below) < end) {
-            ++offset_below;
+        while (offset_below_idx < n_spikes_total &&
+               spike_time_buffer.valueAt(offset_below_idx) < start)
+            ++offset_below_idx;
+
+        while (offset_below_idx < n_spikes_total && spike_time_buffer.valueAt(offset_below_idx) < end) {
+            ++offset_below_idx;
             ++n_spikes_in_bin;
         }
 
         bin_write_buffer.storeTo(n_spikes_in_bin, i);
     }
+
     return offset_below;
 }
 
@@ -44,10 +63,13 @@ template<typename T>
 int64_t search_index_backward(
         CNDArrayWrapper::StaticNDArrayWrapper<T, 1> &spike_time_buffer,
         T before_time,
-        int64_t offset) {
+        int64_t offset_idx) {
+    /*
+     *
+     */
 
-    while (offset > 0 && spike_time_buffer.valueAt(offset) >= before_time) --offset;
-    return offset;
+    while (offset_idx > 0 && spike_time_buffer.valueAt(offset_idx) > before_time) --offset_idx;
+    return offset_idx;
 }
 
 
@@ -64,6 +86,10 @@ int64_t binary_search_index(
      * Assumptions: the entries in spike_time_buffer are strictly increasing,
      *      since spike_time_buffer must be a valid spike train, and a cell can't
      *      spike twice in the same sample
+     *
+     * @param spike_time_buffer: wrapper with shape (n_spikes, ), corresponding to the
+     *      spike times of a single cel
+     * @param time: the time to find
      */
 
     int64_t arr_len = spike_time_buffer.shape[0];
@@ -90,7 +116,7 @@ int64_t binary_search_index(
 ContigNPArray<int64_t> bin_spikes_trials(
         py::dict &spikes_by_cell_id,
         py::list &cell_order,
-        ContigNPArray <int64_t> &trial_bin_cutoffs) {
+        ContigNPArray<int64_t> &trial_bin_cutoffs) {
 
     // figure out how many trials there are, and how many bins there are
     py::buffer_info bin_info = trial_bin_cutoffs.request();
@@ -117,7 +143,7 @@ ContigNPArray<int64_t> bin_spikes_trials(
             {sizeof(int64_t) * n_bins * n_cells, sizeof(int64_t) * n_bins, sizeof(int64_t)}  /* Strides for each dim */
     );
 
-    ContigNPArray <int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
+    ContigNPArray<int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
     py::buffer_info output_info = binned_output.request();
     int64_t *output_data_ptr = static_cast<int64_t *> (output_info.ptr);
 
@@ -132,7 +158,7 @@ ContigNPArray<int64_t> bin_spikes_trials(
     for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
 
         py::object cell_id_pykey = cell_order[cell_idx];
-        ContigNPArray <int64_t> spikes_for_current_cell = py::cast < ContigNPArray < int64_t >> (
+        ContigNPArray<int64_t> spikes_for_current_cell = py::cast<ContigNPArray<int64_t >>(
                 spikes_by_cell_id[cell_id_pykey]);
 
         py::buffer_info spike_time_info = spikes_for_current_cell.request();
@@ -168,10 +194,21 @@ ContigNPArray<int64_t> bin_spikes_trials(
 }
 
 
-ContigNPArray <int64_t> bin_spikes_consecutive_trials(
+ContigNPArray<int64_t> bin_spikes_consecutive_trials(
         py::dict &spikes_by_cell_id,
         py::list &cell_order,
-        ContigNPArray <int64_t> &trial_bin_cutoffs) {
+        ContigNPArray<int64_t> &trial_bin_cutoffs) {
+
+    /*
+     * Bins spikes of
+     *
+     *
+     * @param spikes_by_cell_id
+     * @param cell_order
+     * @param trial_bin_cutoffs: np.ndarray of shape (n_trials, n_bins + 1)
+     *
+     * returns: np.ndarray of shape (n_trials, n_cells, n_bins)
+     */
 
     // figure out how many trials there are, and how many bins there are
     py::buffer_info bin_info = trial_bin_cutoffs.request();
@@ -198,7 +235,7 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
             {sizeof(int64_t) * n_bins * n_cells, sizeof(int64_t) * n_bins, sizeof(int64_t)}  /* Strides for each dim */
     );
 
-    ContigNPArray <int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
+    ContigNPArray<int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
     py::buffer_info output_info = binned_output.request();
     int64_t *output_data_ptr = static_cast<int64_t *> (output_info.ptr);
 
@@ -208,16 +245,15 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
 
     /*
      * Algorithm: loop over each cell
-     * For each trial, bin the spikes
+     * For each cell, bin all of the trials in order
      */
     for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
 
         py::object cell_id_pykey = cell_order[cell_idx];
-        ContigNPArray <int64_t> spikes_for_current_cell = py::cast < ContigNPArray < int64_t >> (
+        ContigNPArray<int64_t> spikes_for_current_cell = py::cast<ContigNPArray<int64_t >>(
                 spikes_by_cell_id[cell_id_pykey]);
 
         py::buffer_info spike_time_info = spikes_for_current_cell.request();
-
         CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> spike_time_wrapper(
                 static_cast<int64_t *>(spike_time_info.ptr),
                 {spike_time_info.shape[0]});
@@ -236,7 +272,7 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
                     CNDArrayWrapper::makeIdxSlice(trial_idx),
                     CNDArrayWrapper::makeAllSlice());
 
-            int64_t trial_bin_start = bin_time_wrapper.valueAt(trial_idx, 0);
+            int64_t trial_bin_start = bin_cutoff_wrapper.valueAt(0);
             spike_offset = search_index_backward<int64_t>(spike_time_wrapper, trial_bin_start, spike_offset);
 
             spike_offset = bin_spikes_single_cell(spike_time_wrapper, output_bin_wrapper,
@@ -248,10 +284,10 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
     return binned_output;
 }
 
-ContigNPArray <int64_t> bin_spikes_movie(
+ContigNPArray<int64_t> bin_spikes_movie(
         py::dict &spikes_by_cell_id,
         py::list &cell_order,
-        ContigNPArray <int64_t> &movie_bin_cutoffs) {
+        ContigNPArray<int64_t> &movie_bin_cutoffs) {
 
     // figure out how many how many bins there are
     py::buffer_info bin_info = movie_bin_cutoffs.request();
@@ -276,7 +312,7 @@ ContigNPArray <int64_t> bin_spikes_movie(
             {sizeof(int64_t) * n_bins, sizeof(int64_t)}  /* Strides for each dim */
     );
 
-    ContigNPArray <int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
+    ContigNPArray<int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
     py::buffer_info output_info = binned_output.request();
     int64_t *output_data_ptr = static_cast<int64_t *> (output_info.ptr);
 
@@ -289,14 +325,14 @@ ContigNPArray <int64_t> bin_spikes_movie(
     for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
 
         py::object cell_id_pykey = cell_order[cell_idx];
-        ContigNPArray <int64_t> spikes_for_current_cell = py::cast < ContigNPArray < int64_t >> (
+        ContigNPArray<int64_t> spikes_for_current_cell = py::cast<ContigNPArray<int64_t >>(
                 spikes_by_cell_id[cell_id_pykey]);
 
         py::buffer_info spike_time_info = spikes_for_current_cell.request();
 
         CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> spike_time_wrapper(
                 static_cast<int64_t *>(spike_time_info.ptr),
-                {spike_time_info.shape[0], });
+                {spike_time_info.shape[0],});
 
         CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> write_wrapper = output_wrapper.slice<1>(
                 CNDArrayWrapper::makeIdxSlice(cell_idx),
@@ -309,16 +345,29 @@ ContigNPArray <int64_t> bin_spikes_movie(
 }
 
 template<class T>
-ContigNPArray <T> merge_multiple_sorted_array(
+ContigNPArray<T> merge_multiple_sorted_array(
         py::list &list_of_spike_trains) {
+    /*
+     * Merges spike trains of oversplits
+     * Uses classic min-heap algorithm to merge N sorted spike trains
+     *
+     * @param list_of_spike_trains
+     */
 
+    /*
+     * Implementation note: std::priority_queue is a max heap
+     *
+     * We want a min heap because we want to merge the spike times
+     * in increasing order, so the priority in MergeWrapper is set up
+     * to be the negative of the first unread spike time
+     */
     std::priority_queue <T, std::vector<MergeWrapper<T>>, ComparePriority<T>> priorityQueue;
 
     int64_t total_size = 0;
     for (auto item : list_of_spike_trains) {
 
         // convert/cast item
-        ContigNPArray <int64_t> spike_train = py::cast < ContigNPArray < int64_t >> (item);
+        ContigNPArray<T> spike_train = py::cast<ContigNPArray<T >>(item);
 
         py::buffer_info array_info = spike_train.request();
         T *base_ptr = static_cast<T *> (array_info.ptr);
@@ -338,7 +387,7 @@ ContigNPArray <T> merge_multiple_sorted_array(
             {sizeof(T)}  /* Strides for each dim */
     );
 
-    ContigNPArray <T> merged_output = ContigNPArray<T>(merged_buffer_info);
+    ContigNPArray<T> merged_output = ContigNPArray<T>(merged_buffer_info);
     py::buffer_info output_info = merged_output.request();
     T *output_base_ptr = static_cast<T *>(output_info.ptr);
 

@@ -190,6 +190,9 @@ namespace CNDArrayWrapper {
 
             int64_t offset = 0;
             for (size_t i = 0; i < indices.size(); ++i) {
+                if (indices[i] > shape[i]) {
+                    throw std::outofrange();
+                }
                 offset += (stride[i] * indices[i]);
             }
 
