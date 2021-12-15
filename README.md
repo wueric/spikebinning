@@ -8,3 +8,9 @@ The package also provides tools for merging spike trains of oversplits.
 #### Dependencies
 1. pybind11
 2. numpy
+
+#### Installation
+
+```shell script
+python setup.py install --force
+```

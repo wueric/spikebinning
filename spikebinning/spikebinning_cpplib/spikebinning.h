@@ -143,7 +143,7 @@ ContigNPArray<int64_t> bin_spikes_trials(
 
         int64_t trial_idx = 0;
         int64_t spike_offset = binary_search_index<int64_t>(spike_time_wrapper,
-                                                            bin_time_wrapper.valueAt(cell_idx, trial_idx));
+                                                            bin_time_wrapper.valueAt(trial_idx, 0));
         for (; trial_idx < n_trials; ++trial_idx) {
 
             CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> output_bin_wrapper = output_wrapper.slice<1>(
@@ -224,7 +224,7 @@ ContigNPArray <int64_t> bin_spikes_consecutive_trials(
 
         int64_t trial_idx = 0;
         int64_t spike_offset = binary_search_index<int64_t>(spike_time_wrapper,
-                                                            bin_time_wrapper.valueAt(cell_idx, trial_idx));
+                                                            bin_time_wrapper.valueAt(trial_idx, 0));
 
         for (; trial_idx < n_trials; ++trial_idx) {
 
