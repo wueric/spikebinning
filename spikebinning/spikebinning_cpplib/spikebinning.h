@@ -55,7 +55,7 @@ int64_t bin_spikes_single_cell(
         bin_write_buffer.storeTo(n_spikes_in_bin, i);
     }
 
-    return offset_below;
+    return offset_below_idx;
 }
 
 
@@ -109,7 +109,7 @@ int64_t binary_search_index(
         }
     }
 
-    return idx;
+    return idx + 1;
 }
 
 

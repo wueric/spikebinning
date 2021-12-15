@@ -7,6 +7,8 @@
 
 #include <vector>
 #include <array>
+#include <stdexcept>
+#include <string>
 
 /*
  * Wrappers for easy read-write access and slicing for C-ordered
@@ -179,6 +181,20 @@ namespace CNDArrayWrapper {
                 std::array <int64_t, N> _shape) : base_ptr(_base_ptr), shape(_shape),
                                                   stride(_auto_stride<N>(_shape)) {};
 
+        std::string generate_shape_str() const {
+
+            std::ostringstream stream;
+            stream << "(";
+
+            for (uint8_t i = 0; i < N - 1; ++i) {
+                stream << shape[i] << ", ";
+            }
+
+            stream << shape[N - 1] << ")";
+            return stream.str();
+        }
+
+
         template<typename... Ix>
         T *addressIx(Ix... ix) const { return base_ptr + computeOffset(ix...); };
 
@@ -190,8 +206,14 @@ namespace CNDArrayWrapper {
 
             int64_t offset = 0;
             for (size_t i = 0; i < indices.size(); ++i) {
-                if (indices[i] > shape[i]) {
-                    throw std::outofrange();
+                if (indices[i] >= shape[i] || indices[i] < 0) {
+                    //throw std::out_of_range("index {} out-of-range for dim {}, max {}", indices[i], i, shape[i]);
+                    //
+                    std::ostringstream stream;
+                    stream << "index " << indices[i] << " out-of-range for dim " << i << "; shape "
+                           << generate_shape_str();
+                    std::string error_string = stream.str();
+                    throw std::out_of_range(error_string);
                 }
                 offset += (stride[i] * indices[i]);
             }

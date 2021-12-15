@@ -16,11 +16,11 @@ struct MergeWrapper {
 
 
     MergeWrapper<T>(T *ptr_, int64_t dim0_) : base_ptr(ptr_), dim0(dim0_), curr_ix(0) {
-        priority = *(base_ptr);
+        priority = -(*base_ptr);
     };
 
     MergeWrapper<T>(T *ptr_, int64_t dim0_, int64_t curr_ix_) : base_ptr(ptr_), dim0(dim0_), curr_ix(curr_ix_) {
-        priority = *(base_ptr + curr_ix_);
+        priority = -(*(base_ptr + curr_ix_));
     };
 
     T getCurrent() const {return priority;}
@@ -34,7 +34,7 @@ struct MergeWrapper {
         if (atEnd()) {
             priority = std::numeric_limits<T>::min();
         } else {
-            -priority = *(base_ptr + curr_ix);
+            priority = -(*(base_ptr + curr_ix));
         }
     }
 
