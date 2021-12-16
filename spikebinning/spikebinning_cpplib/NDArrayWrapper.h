@@ -205,7 +205,7 @@ namespace CNDArrayWrapper {
             auto indices = std::array < int64_t, N>{{ ix... }};
 
             int64_t offset = 0;
-            for (size_t i = 0; i < indices.size(); ++i) {
+            for (size_t i = 0; i < N; ++i) {
                 if (indices[i] >= shape[i] || indices[i] < 0) {
                     //throw std::out_of_range("index {} out-of-range for dim {}, max {}", indices[i], i, shape[i]);
                     //
@@ -248,7 +248,7 @@ namespace CNDArrayWrapper {
             //      If it corresponds to multiple rows, then we need to determine the number of rows and the
             //          step size between the rows
             int64_t output_ax = M - 1;
-            for (int64_t ax = slices.size() - 1; ax >= 0; --ax) {
+            for (int64_t ax = N - 1; ax >= 0; --ax) {
                 auto current_slice = slices[ax];
                 if (!current_slice->is_singledim()) {
                     output_shapes[output_ax] = current_slice->compute_dim(shape[ax]);
