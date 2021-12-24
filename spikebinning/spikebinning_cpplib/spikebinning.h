@@ -38,14 +38,16 @@ int64_t bin_spikes_single_cell(
     const int64_t n_bin_edges = bin_cutoff_times.shape[0];
     const int64_t n_spikes_total = spike_time_buffer.shape[0];
 
-    for (int64_t i = 0; i < n_bin_edges - 1; ++i) {
-        int64_t start = bin_cutoff_times.valueAt(i);
-        int64_t end = bin_cutoff_times.valueAt(i + 1);
+    int64_t start, end, n_spikes_in_bin;
+    start = bin_cutoff_times.valueAt(0);
 
-        int64_t n_spikes_in_bin = 0;
-        while (offset_below_idx < n_spikes_total &&
-               spike_time_buffer.valueAt(offset_below_idx) < start)
-            ++offset_below_idx;
+    while (offset_below_idx < n_spikes_total &&
+           spike_time_buffer.valueAt(offset_below_idx) < start) ++offset_below_idx;
+
+    for (int64_t i = 0; i < n_bin_edges - 1; ++i) {
+        start = bin_cutoff_times.valueAt(i);
+        end = bin_cutoff_times.valueAt(i + 1);
+        n_spikes_in_bin = 0;
 
         while (offset_below_idx < n_spikes_total && spike_time_buffer.valueAt(offset_below_idx) < end) {
             ++offset_below_idx;
