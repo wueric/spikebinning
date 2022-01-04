@@ -16,8 +16,8 @@ PYBIND11_MODULE(spikebinning_cpplib, m) {
           pybind11::return_value_policy::take_ownership,
           "Function that bins spikes into bins determined by trial structure");
 
-    m.def("bin_spikes_trial_parallel",
-            &bin_spikes_trial_parallel,
+    m.def("bin_spikes_trials_parallel",
+            &bin_spikes_trials_parallel,
             pybind11::return_value_policy::take_ownership,
             "Function that bins spikes into bins determined by trial structure. Uses parallelism.");
 

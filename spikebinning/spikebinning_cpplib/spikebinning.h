@@ -116,7 +116,7 @@ int64_t binary_search_index(
 }
 
 
-ContigNPArray<int64_t> bin_spikes_trial_parallel(
+ContigNPArray<int64_t> bin_spikes_trials_parallel(
         std::map <int64_t, ContigNPArray<int64_t>> spikes_by_cell_id,
         std::vector <int64_t> cell_order,
         ContigNPArray<int64_t> trial_bin_cutoffs) {
