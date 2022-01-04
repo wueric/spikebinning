@@ -42,7 +42,8 @@ int64_t bin_spikes_single_cell(
     start = bin_cutoff_times.valueAt(0);
 
     while (offset_below_idx < n_spikes_total &&
-           spike_time_buffer.valueAt(offset_below_idx) < start) ++offset_below_idx;
+           spike_time_buffer.valueAt(offset_below_idx) < start)
+        ++offset_below_idx;
 
     for (int64_t i = 0; i < n_bin_edges - 1; ++i) {
         start = bin_cutoff_times.valueAt(i);
@@ -112,6 +113,84 @@ int64_t binary_search_index(
     }
 
     return idx + 1;
+}
+
+
+ContigNPArray<int64_t> bin_spikes_trial_parallel(
+        std::map <int64_t, ContigNPArray<int64_t>> spikes_by_cell_id,
+        std::vector <int64_t> cell_order,
+        ContigNPArray<int64_t> trial_bin_cutoffs) {
+
+    // figure out how many trials there are, and how many bins there are
+    py::buffer_info bin_info = trial_bin_cutoffs.request();
+    int64_t *bin_time_matrix_ptr = static_cast<int64_t *> (bin_info.ptr);
+    const int64_t n_trials = bin_info.shape[0];
+    const int64_t n_bin_cutoffs = bin_info.shape[1];
+
+    const int64_t n_bins = n_bin_cutoffs - 1;
+
+    CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 2> bin_time_wrapper(
+            bin_time_matrix_ptr,
+            {n_trials, n_bin_cutoffs});
+
+    // figure out how many cells there are
+    const int64_t n_cells = cell_order.size();
+
+    // allocate the output binned times
+    auto output_buffer_info = py::buffer_info(
+            nullptr,            /* Pointer to data (nullptr -> ask NumPy to allocate!) */
+            sizeof(int64_t),     /* Size of one item */
+            py::format_descriptor<int64_t>::value, /* Buffer format */
+            3,          /* How many dimensions? */
+            {n_trials, n_cells, n_bins}, /* Number of elements for each dimension */
+            {sizeof(int64_t) * n_bins * n_cells, sizeof(int64_t) * n_bins, sizeof(int64_t)}  /* Strides for each dim */
+    );
+
+    ContigNPArray<int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
+    py::buffer_info output_info = binned_output.request();
+    int64_t *output_data_ptr = static_cast<int64_t *> (output_info.ptr);
+
+    CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 3> output_wrapper(
+            output_data_ptr,
+            {n_trials, n_cells, n_bins});
+
+
+#pragma omp parallel for
+    for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
+        int64_t cell_id = cell_order[cell_idx];
+
+        ContigNPArray<int64_t> spikes_for_current_cell = spikes_by_cell_id[cell_id];
+
+        py::buffer_info spike_time_info = spikes_for_current_cell.request();
+
+        CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> spike_time_wrapper(
+                static_cast<int64_t *>(spike_time_info.ptr),
+                {spike_time_info.shape[0]});
+
+        int64_t trial_idx = 0;
+        int64_t spike_offset = binary_search_index<int64_t>(spike_time_wrapper,
+                                                            bin_time_wrapper.valueAt(trial_idx, 0));
+        for (; trial_idx < n_trials; ++trial_idx) {
+
+            CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> output_bin_wrapper = output_wrapper.slice<1>(
+                    CNDArrayWrapper::makeIdxSlice(trial_idx),
+                    CNDArrayWrapper::makeIdxSlice(cell_idx),
+                    CNDArrayWrapper::makeAllSlice());
+
+            CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> bin_cutoff_wrapper = bin_time_wrapper.slice<1>(
+                    CNDArrayWrapper::makeIdxSlice(trial_idx),
+                    CNDArrayWrapper::makeAllSlice());
+
+            int64_t trial_bin_start = bin_time_wrapper.valueAt(trial_idx, 0);
+            spike_offset = binary_search_index<int64_t>(spike_time_wrapper, trial_bin_start);
+
+            spike_offset = bin_spikes_single_cell(spike_time_wrapper, output_bin_wrapper,
+                                                  bin_cutoff_wrapper, spike_offset);
+
+        }
+    }
+
+    return binned_output;
 }
 
 
