@@ -89,51 +89,6 @@ def bin_spikes_trials(spikes_by_cell_id: Dict[int, np.ndarray],
                                                  trial_structured_bin_times)
 
 
-def bin_spikes_consecutive_trials(spikes_by_cell_id: Dict[int, np.ndarray],
-                                  cell_ordering: List[int],
-                                  trial_structured_bin_times: np.ndarray) -> np.ndarray:
-    '''
-
-    Bins spikes for multiple cells into the specified intervals
-        Assumes a trial design where the output matrix has a dimension
-        for the different trials
-
-    The trial times in trial_structured_bin_times are assumed to be in the
-        order that they occurred in during the experiment, otherwise this
-        function is very inefficient.
-
-    :param spikes_by_cell_id: Dict[int, np.ndarray], spike trains for all of the
-        cells that we are interested in binning
-
-        key is integer cell id
-        value is np.ndarray of spike times, shape (n_spike_times, )
-
-        The spike times are assumed to be monotonically increasing, since cells
-            cannot spike twice in the same sample.
-
-    :param cell_ordering: List[int] where each entry is a cell id, corresponding
-        to a key in spikes_by_cell_id
-
-        Ordering of cell id for the output binned matrix.
-
-    :param trial_structured_bin_times: np.ndarray, shape (n_trials, n_bin_cutoffs),
-        corresponding to the bin cutoff times for each trial.
-
-        n_bin_cutoffs corresponds to (n_bin_cutoffs - 1) bins per trial, since every
-        bin requires its start and end times to be specified, and we assume that the
-        bins are consecutive.
-    :return: np.ndarray, shape (n_trials, n_cells, n_bin_cutoffs - 1)
-
-        Binned spike trains for every trial / cell
-    '''
-    if trial_structured_bin_times.ndim != 2:
-        raise ValueError('trial_structured_bin_times should have dim 2')
-
-    return spikebinning_cpplib.bin_spikes_consecutive_trials(spikes_by_cell_id,
-                                                             cell_ordering,
-                                                             trial_structured_bin_times)
-
-
 def merge_multiple_sorted_array(spike_trains_to_merge: List[np.ndarray]) \
         -> np.ndarray:
     '''
