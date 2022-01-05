@@ -119,8 +119,6 @@ void _bin_spikes_into_buffer(
     const int64_t n_trials = bin_info.shape[0];
     const int64_t n_bin_cutoffs = bin_info.shape[1];
 
-    const int64_t n_bins = n_bin_cutoffs - 1;
-
     CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 2> bin_time_wrapper(
             bin_time_matrix_ptr,
             {n_trials, n_bin_cutoffs});
@@ -175,19 +173,26 @@ void _bin_spikes_into_buffer(
         }
     }
 
-    return binned_output;
 }
 
 
 ContigNPArray<int64_t> multidataset_bin_spikes_trials_parallel(
         std::vector<MultiDataset> multiple_datasets) {
 
-    const int64_t n_datasets = multiple_datasets.size();
+    int64_t n_datasets = multiple_datasets.size();
 
-    std::array<int64_t, n_datasets> dataset_lengths { };
-    std::array<int64_t, n_datasets> dataset_offsets { };
+    std::vector<int64_t> dataset_lengths { };
+    std::vector<int64_t> dataset_offsets { };
+
+    auto first_tup = multiple_datasets[0];
+    auto first_trial_bin_cutoffs = std::get<2>(first_tup);
+    py::buffer_info first_bin_info = first_trial_bin_cutoffs.request();
+    int64_t n_bins = first_bin_info.shape[1] - 1;
+
+    auto first_cell_order = std::get<1>(first_tup);
+    int64_t n_cells = first_cell_order.size();
+
     int64_t n_trials = 0;
-    int64_t n_cells, n_bins, n_bin_cutoffs;
     for (int64_t i = 0; i < n_datasets; ++i) {
         auto tup = multiple_datasets[i];
 
@@ -195,15 +200,10 @@ ContigNPArray<int64_t> multidataset_bin_spikes_trials_parallel(
         py::buffer_info bin_info = trial_bin_cutoffs.request();
         int64_t n_trials_dataset = bin_info.shape[0];
 
-        dataset_offsets[i] = n_trials;
-        dataset_lengths[i] = n_trials_dataset;
+        dataset_offsets.push_back(n_trials);
+        dataset_lengths.push_back(n_trials_dataset);
+
         n_trials += n_trials_dataset;
-
-        n_bin_cutoffs = bin_info.shape[1];
-        n_bins = n_bin_cutoffs - 1;
-
-        auto cell_order = std::get<1>(tup);
-        n_cells = cell_order.size();
     }
 
     // allocate the output binned times
