@@ -45,6 +45,31 @@ def bin_spikes_movie(spikes_by_cell_id: Dict[int, np.ndarray],
                                                 movie_cutoff_times)
 
 
+def multidataset_bin_spikes_trials_parallel(
+        multidataset_list: List[Tuple[Dict[int, np.ndarray], List[int], np.ndarray]]) -> np.ndarray:
+    first_tup = multidataset_list[0]
+
+    first_cell_list = first_tup[1]  # type: List[int]
+    first_bin_cutoffs = first_tup[2]  # type: np.ndarray
+
+    n_cells = len(first_cell_list)
+    n_bin_cutoffs = first_bin_cutoffs.shape[1]
+
+    for i, n_tup in enumerate(multidataset_list):
+        _, cell_order_list, bin_cutoff_times = n_tup
+
+        if bin_cutoff_times.ndim != 2:
+            raise ValueError("bin cutoff times should have ndim 2")
+
+        if len(cell_order_list) != n_cells:
+            raise ValueError(f"Dataset {i} has {len(cell_order_list)} cells, expected {n_cells} cells")
+
+        if bin_cutoff_times.shape[1] != n_bin_cutoffs:
+            raise ValueError(f"Dataset {i} has {bin_cutoff_times.shape[1]} bin cutoffs, expected {n_bin_cutoffs}")
+
+    return spikebinning_cpplib.multidataset_bin_spikes_trials_parallel(multidataset_list)
+
+
 def bin_spikes_trials(spikes_by_cell_id: Dict[int, np.ndarray],
                       cell_ordering: List[int],
                       trial_structured_bin_times: np.ndarray) -> np.ndarray:
