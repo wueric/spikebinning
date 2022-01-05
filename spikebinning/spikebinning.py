@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from . import spikebinning_cpplib
 
@@ -45,6 +45,31 @@ def bin_spikes_movie(spikes_by_cell_id: Dict[int, np.ndarray],
                                                 movie_cutoff_times)
 
 
+def multidataset_bin_spikes_trials_parallel(
+        multidataset_list: List[Tuple[Dict[int, np.ndarray], List[int], np.ndarray]]) -> np.ndarray:
+    first_tup = multidataset_list[0]
+
+    first_cell_list = first_tup[1]  # type: List[int]
+    first_bin_cutoffs = first_tup[2]  # type: np.ndarray
+
+    n_cells = len(first_cell_list)
+    n_bin_cutoffs = first_bin_cutoffs.shape[1]
+
+    for i, n_tup in enumerate(multidataset_list):
+        _, cell_order_list, bin_cutoff_times = n_tup
+
+        if bin_cutoff_times.ndim != 2:
+            raise ValueError("bin cutoff times should have ndim 2")
+
+        if len(cell_order_list) != n_cells:
+            raise ValueError(f"Dataset {i} has {len(cell_order_list)} cells, expected {n_cells} cells")
+
+        if bin_cutoff_times.shape[1] != n_bin_cutoffs:
+            raise ValueError(f"Dataset {i} has {bin_cutoff_times.shape[1]} bin cutoffs, expected {n_bin_cutoffs}")
+
+    return spikebinning_cpplib.multidataset_bin_spikes_trials_parallel(multidataset_list)
+
+
 def bin_spikes_trials(spikes_by_cell_id: Dict[int, np.ndarray],
                       cell_ordering: List[int],
                       trial_structured_bin_times: np.ndarray) -> np.ndarray:
@@ -87,6 +112,50 @@ def bin_spikes_trials(spikes_by_cell_id: Dict[int, np.ndarray],
     return spikebinning_cpplib.bin_spikes_trials(spikes_by_cell_id,
                                                  cell_ordering,
                                                  trial_structured_bin_times)
+
+
+def bin_spikes_trials_parallel(spikes_by_cell_id: Dict[int, np.ndarray],
+                               cell_ordering: List[int],
+                               trial_structured_bin_times: np.ndarray) -> np.ndarray:
+    '''
+
+    Bins spikes for multiple cells into the specified intervals
+        Assumes a trial design where the output matrix has a dimension
+        for the different trials
+
+    The trials can be in any order.
+
+    :param spikes_by_cell_id: Dict[int, np.ndarray], spike trains for all of the
+        cells that we are interested in binning
+
+        key is integer cell id
+        value is np.ndarray of spike times, shape (n_spike_times, )
+
+        The spike times are assumed to be monotonically increasing, since cells
+            cannot spike twice in the same sample.
+
+    :param cell_ordering: List[int] where each entry is a cell id, corresponding
+        to a key in spikes_by_cell_id
+
+        Ordering of cell id for the output binned matrix.
+
+    :param trial_structured_bin_times: np.ndarray, shape (n_trials, n_bin_cutoffs),
+        corresponding to the bin cutoff times for each trial.
+
+        n_bin_cutoffs corresponds to (n_bin_cutoffs - 1) bins per trial, since every
+        bin requires its start and end times to be specified, and we assume that the
+        bins are consecutive.
+    :return: np.ndarray, shape (n_trials, n_cells, n_bin_cutoffs - 1)
+
+        Binned spike trains for every trial / cell
+    '''
+
+    if trial_structured_bin_times.ndim != 2:
+        raise ValueError('trial_structured_bin_times should have dim 2')
+
+    return spikebinning_cpplib.bin_spikes_trials_parallel(spikes_by_cell_id,
+                                                          cell_ordering,
+                                                          trial_structured_bin_times)
 
 
 def merge_multiple_sorted_array(spike_trains_to_merge: List[np.ndarray]) \

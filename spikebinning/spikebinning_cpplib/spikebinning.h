@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <queue>
+#include <memory>
 
 #include "MergeWrapper.h"
 #include "NDArrayWrapper.h"
@@ -42,7 +43,8 @@ int64_t bin_spikes_single_cell(
     start = bin_cutoff_times.valueAt(0);
 
     while (offset_below_idx < n_spikes_total &&
-           spike_time_buffer.valueAt(offset_below_idx) < start) ++offset_below_idx;
+           spike_time_buffer.valueAt(offset_below_idx) < start)
+        ++offset_below_idx;
 
     for (int64_t i = 0; i < n_bin_edges - 1; ++i) {
         start = bin_cutoff_times.valueAt(i);
@@ -58,20 +60,6 @@ int64_t bin_spikes_single_cell(
     }
 
     return offset_below_idx;
-}
-
-
-template<typename T>
-int64_t search_index_backward(
-        CNDArrayWrapper::StaticNDArrayWrapper<T, 1> &spike_time_buffer,
-        T before_time,
-        int64_t offset_idx) {
-    /*
-     *
-     */
-
-    while (offset_idx > 0 && spike_time_buffer.valueAt(offset_idx) > before_time) --offset_idx;
-    return offset_idx;
 }
 
 
@@ -112,6 +100,193 @@ int64_t binary_search_index(
     }
 
     return idx + 1;
+}
+
+
+using MulticellSpikeTrain = std::map<int64_t, ContigNPArray<int64_t>>;
+using MultiDataset = std::tuple <MulticellSpikeTrain, std::vector<int64_t>, ContigNPArray<int64_t>>;
+
+
+void _bin_spikes_into_buffer(
+        MulticellSpikeTrain spikes_by_cell_id,
+        std::vector<int64_t> cell_order,
+        ContigNPArray<int64_t> trial_bin_cutoffs,
+        CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 3> output_wrapper) {
+
+    // figure out how many trials there are, and how many bins there are
+    py::buffer_info bin_info = trial_bin_cutoffs.request();
+    int64_t *bin_time_matrix_ptr = static_cast<int64_t *> (bin_info.ptr);
+    const int64_t n_trials = bin_info.shape[0];
+    const int64_t n_bin_cutoffs = bin_info.shape[1];
+
+    CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 2> bin_time_wrapper(
+            bin_time_matrix_ptr,
+            {n_trials, n_bin_cutoffs});
+
+    // figure out how many cells there are
+    const int64_t n_cells = cell_order.size();
+
+    using Int64_1DWrapper = CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1>;
+    std::map <int64_t, std::unique_ptr<Int64_1DWrapper>> spike_time_wrapper_map{};
+    for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
+
+        int64_t cell_id = cell_order[cell_idx];
+
+        ContigNPArray<int64_t> spikes_for_current_cell = spikes_by_cell_id[cell_id];
+
+        py::buffer_info spike_time_info = spikes_for_current_cell.request();
+
+        std::array<int64_t, 1> spike_shape = {spike_time_info.shape[0]};
+
+        spike_time_wrapper_map[cell_id] = std::make_unique<Int64_1DWrapper>(
+                static_cast<int64_t *>(spike_time_info.ptr),
+                spike_shape);
+
+    }
+
+#pragma omp parallel for
+    for (int64_t cell_idx = 0; cell_idx < n_cells; ++cell_idx) {
+        int64_t cell_id = cell_order[cell_idx];
+
+        auto spike_time_wrapper = *spike_time_wrapper_map[cell_id];
+
+        int64_t trial_idx = 0;
+        int64_t spike_offset = binary_search_index<int64_t>(spike_time_wrapper,
+                                                            bin_time_wrapper.valueAt(trial_idx, 0));
+        for (; trial_idx < n_trials; ++trial_idx) {
+
+            CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> output_bin_wrapper = output_wrapper.slice<1>(
+                    CNDArrayWrapper::makeIdxSlice(trial_idx),
+                    CNDArrayWrapper::makeIdxSlice(cell_idx),
+                    CNDArrayWrapper::makeAllSlice());
+
+            CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 1> bin_cutoff_wrapper = bin_time_wrapper.slice<1>(
+                    CNDArrayWrapper::makeIdxSlice(trial_idx),
+                    CNDArrayWrapper::makeAllSlice());
+
+            int64_t trial_bin_start = bin_time_wrapper.valueAt(trial_idx, 0);
+            spike_offset = binary_search_index<int64_t>(spike_time_wrapper, trial_bin_start);
+
+            spike_offset = bin_spikes_single_cell(spike_time_wrapper, output_bin_wrapper,
+                                                  bin_cutoff_wrapper, spike_offset);
+
+        }
+    }
+
+}
+
+
+ContigNPArray<int64_t> multidataset_bin_spikes_trials_parallel(
+        std::vector<MultiDataset> multiple_datasets) {
+
+    int64_t n_datasets = multiple_datasets.size();
+
+    std::vector<int64_t> dataset_lengths { };
+    std::vector<int64_t> dataset_offsets { };
+
+    auto first_tup = multiple_datasets[0];
+    auto first_trial_bin_cutoffs = std::get<2>(first_tup);
+    py::buffer_info first_bin_info = first_trial_bin_cutoffs.request();
+    int64_t n_bins = first_bin_info.shape[1] - 1;
+
+    auto first_cell_order = std::get<1>(first_tup);
+    int64_t n_cells = first_cell_order.size();
+
+    int64_t n_trials = 0;
+    for (int64_t i = 0; i < n_datasets; ++i) {
+        auto tup = multiple_datasets[i];
+
+        auto trial_bin_cutoffs = std::get<2>(tup);
+        py::buffer_info bin_info = trial_bin_cutoffs.request();
+        int64_t n_trials_dataset = bin_info.shape[0];
+
+        dataset_offsets.push_back(n_trials);
+        dataset_lengths.push_back(n_trials_dataset);
+
+        n_trials += n_trials_dataset;
+    }
+
+    // allocate the output binned times
+    auto output_buffer_info = py::buffer_info(
+            nullptr,            /* Pointer to data (nullptr -> ask NumPy to allocate!) */
+            sizeof(int32_t),     /* Size of one item */
+            py::format_descriptor<int64_t>::value, /* Buffer format */
+            3,          /* How many dimensions? */
+            {n_trials, n_cells, n_bins}, /* Number of elements for each dimension */
+            {sizeof(int64_t) * n_bins * n_cells, sizeof(int64_t) * n_bins, sizeof(int64_t)}  /* Strides for each dim */
+    );
+
+    ContigNPArray<int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
+    py::buffer_info output_info = binned_output.request();
+    int64_t *output_data_ptr = static_cast<int64_t *> (output_info.ptr);
+
+    CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 3> total_output_wrapper(
+            output_data_ptr,
+            {n_trials, n_cells, n_bins});
+
+    for (int64_t i = 0; i < n_datasets; ++i) {
+
+        int64_t dataset_offset = dataset_offsets[i];
+        int64_t dataset_length = dataset_lengths[i];
+
+        CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 3> output_wrapper = total_output_wrapper.slice<3>(
+                CNDArrayWrapper::makeRangeSlice(dataset_offset, dataset_offset + dataset_length),
+                CNDArrayWrapper::makeAllSlice(),
+                CNDArrayWrapper::makeAllSlice());
+
+        auto tup = multiple_datasets[i];
+        auto spikes_by_cell_id = std::get<0>(tup);
+        auto cell_order = std::get<1>(tup);
+        auto trial_bin_cutoffs = std::get<2>(tup);
+
+        _bin_spikes_into_buffer(spikes_by_cell_id, cell_order, trial_bin_cutoffs, output_wrapper);
+    }
+
+    return binned_output;
+}
+
+
+ContigNPArray<int64_t> bin_spikes_trials_parallel(
+        std::map <int64_t, ContigNPArray<int64_t>> spikes_by_cell_id,
+        std::vector <int64_t> cell_order,
+        ContigNPArray<int64_t> trial_bin_cutoffs) {
+
+    // figure out how many trials there are, and how many bins there are
+    py::buffer_info bin_info = trial_bin_cutoffs.request();
+    int64_t *bin_time_matrix_ptr = static_cast<int64_t *> (bin_info.ptr);
+    const int64_t n_trials = bin_info.shape[0];
+    const int64_t n_bin_cutoffs = bin_info.shape[1];
+
+    const int64_t n_bins = n_bin_cutoffs - 1;
+
+    CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 2> bin_time_wrapper(
+            bin_time_matrix_ptr,
+            {n_trials, n_bin_cutoffs});
+
+    // figure out how many cells there are
+    const int64_t n_cells = cell_order.size();
+
+    // allocate the output binned times
+    auto output_buffer_info = py::buffer_info(
+            nullptr,            /* Pointer to data (nullptr -> ask NumPy to allocate!) */
+            sizeof(int64_t),     /* Size of one item */
+            py::format_descriptor<int64_t>::value, /* Buffer format */
+            3,          /* How many dimensions? */
+            {n_trials, n_cells, n_bins}, /* Number of elements for each dimension */
+            {sizeof(int64_t) * n_bins * n_cells, sizeof(int64_t) * n_bins, sizeof(int64_t)}  /* Strides for each dim */
+    );
+
+    ContigNPArray<int64_t> binned_output = ContigNPArray<int64_t>(output_buffer_info);
+    py::buffer_info output_info = binned_output.request();
+    int64_t *output_data_ptr = static_cast<int64_t *> (output_info.ptr);
+
+    CNDArrayWrapper::StaticNDArrayWrapper<int64_t, 3> output_wrapper(
+            output_data_ptr,
+            {n_trials, n_cells, n_bins});
+
+    _bin_spikes_into_buffer(spikes_by_cell_id, cell_order, trial_bin_cutoffs, output_wrapper);
+
+    return binned_output;
 }
 
 
@@ -273,7 +448,7 @@ ContigNPArray<T> merge_multiple_sorted_array(
      * in increasing order, so the priority in MergeWrapper is set up
      * to be the negative of the first unread spike time
      */
-    std::priority_queue <T, std::vector<MergeWrapper<T>>, ComparePriority<T>> priorityQueue;
+    std::priority_queue < T, std::vector < MergeWrapper < T >>, ComparePriority < T >> priorityQueue;
 
     int64_t total_size = 0;
     for (auto item : list_of_spike_trains) {
@@ -306,7 +481,7 @@ ContigNPArray<T> merge_multiple_sorted_array(
     int64_t write_offset = 0;
     while (!priorityQueue.empty()) {
 
-        MergeWrapper<T> min_element = priorityQueue.top();
+        MergeWrapper <T> min_element = priorityQueue.top();
         priorityQueue.pop();
         T current_val = min_element.getCurrent();
         *(output_base_ptr + write_offset) = current_val;
