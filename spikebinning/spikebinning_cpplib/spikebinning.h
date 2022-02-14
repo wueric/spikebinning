@@ -469,7 +469,7 @@ ContigNPArray<T> merge_multiple_sorted_array(
             nullptr,            /* Pointer to data (nullptr -> ask NumPy to allocate!) */
             sizeof(T),     /* Size of one item */
             py::format_descriptor<T>::value, /* Buffer format */
-            2,          /* How many dimensions? */
+            1,          /* How many dimensions? */
             {total_size}, /* Number of elements for each dimension */
             {sizeof(T)}  /* Strides for each dim */
     );
