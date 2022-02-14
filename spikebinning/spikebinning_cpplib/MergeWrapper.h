@@ -23,7 +23,7 @@ struct MergeWrapper {
         priority = -(*(base_ptr + curr_ix_));
     };
 
-    T getCurrent() const {return priority;}
+    T getCurrent() const {return -priority;}
 
     bool atEnd() const {return curr_ix == dim0;}
 
