@@ -21,10 +21,10 @@ struct MergeWrapper {
     };
 
     T priority() {
-        return -(*(base_idx + curr_ix));
+        return -(*(base_ptr + curr_ix));
     }
 
-    T getCurrent() const {return *(base_idx + curr_ix);}
+    T getCurrent() const {return *(base_ptr + curr_ix);}
 
     bool atEnd() const {return curr_ix >= dim0;}
 
