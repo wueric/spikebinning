@@ -6,6 +6,7 @@
 #define RECONSTRUCTION_V2_MERGEWRAPPER_H
 
 #include <limits>
+#include <iostream>
 
 template<class T>
 struct MergeWrapper {
@@ -15,10 +16,10 @@ struct MergeWrapper {
 
 
     MergeWrapper<T>(T *ptr_, int64_t dim0_) : base_ptr(ptr_), dim0(dim0_), curr_ix(0) {
-    };
+    }
 
     MergeWrapper<T>(T *ptr_, int64_t dim0_, int64_t curr_ix_) : base_ptr(ptr_), dim0(dim0_), curr_ix(curr_ix_) {
-    };
+    }
 
     T priority() const {
         if (!atEnd()) {
@@ -36,9 +37,6 @@ struct MergeWrapper {
         ++curr_ix;
     }
 
-    friend bool operator< (MergeWrapper<T> const& lhs, MergeWrapper<T> const& rhs) {
-        return lhs.priority < rhs.priority;
-    }
 };
 
 template<class T>
