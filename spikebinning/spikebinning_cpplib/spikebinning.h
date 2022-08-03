@@ -483,8 +483,7 @@ ContigNPArray<T> merge_multiple_sorted_array(
 
         MergeWrapper <T> min_element = priorityQueue.top();
         priorityQueue.pop();
-        T current_val = min_element.getCurrent();
-        *(output_base_ptr + write_offset) = current_val;
+        *(output_base_ptr + write_offset) = min_element.getCurrent();;
         ++write_offset;
 
         min_element.increment();

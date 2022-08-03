@@ -33,7 +33,7 @@ struct MergeWrapper {
     bool atEnd() const {return curr_ix >= dim0;}
 
     void increment() {
-        if (!atEnd()) ++curr_ix;
+        ++curr_ix;
     }
 
     friend bool operator< (MergeWrapper<T> const& lhs, MergeWrapper<T> const& rhs) {
