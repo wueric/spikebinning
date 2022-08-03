@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <queue>
 #include <memory>
+#include <iostream>
 
 #include "MergeWrapper.h"
 #include "NDArrayWrapper.h"
@@ -433,7 +434,7 @@ ContigNPArray<int64_t> bin_spikes_movie(
 
 template<class T>
 ContigNPArray<T> merge_multiple_sorted_array(
-        py::list &list_of_spike_trains) {
+        py::list& list_of_spike_trains) {
     /*
      * Merges spike trains of oversplits
      * Uses classic min-heap algorithm to merge N sorted spike trains
@@ -448,20 +449,27 @@ ContigNPArray<T> merge_multiple_sorted_array(
      * in increasing order, so the priority in MergeWrapper is set up
      * to be the negative of the first unread spike time
      */
-    std::priority_queue < T, std::vector < MergeWrapper < T >>, ComparePriority < T >> priorityQueue;
+    std::priority_queue < MergeWrapper<T>, std::vector < MergeWrapper < T >>, ComparePriority<T>> priorityQueue;
 
+    std::vector<MergeWrapper<T>> dumb;
+
+    std::vector<T*> free_list;
     int64_t total_size = 0;
     for (auto item : list_of_spike_trains) {
 
         // convert/cast item
         ContigNPArray<T> spike_train = py::cast<ContigNPArray<T >>(item);
-
         py::buffer_info array_info = spike_train.request();
         T *base_ptr = static_cast<T *> (array_info.ptr);
-        int64_t current_size = array_info.shape[0];
+        int64_t dim = array_info.shape[0];
 
-        priorityQueue.push(MergeWrapper<T>(base_ptr, current_size));
-        total_size = total_size + current_size;
+        T *temp_buffer = new T[dim];
+        memcpy(temp_buffer, base_ptr, dim * sizeof(T));
+
+        free_list.push_back(temp_buffer);
+
+        priorityQueue.push(MergeWrapper<T>(temp_buffer, dim));
+        total_size = total_size + dim;
     }
 
     // allocate the output binned times
@@ -481,16 +489,20 @@ ContigNPArray<T> merge_multiple_sorted_array(
     int64_t write_offset = 0;
     while (!priorityQueue.empty()) {
 
-        MergeWrapper <T> min_element = priorityQueue.top();
+        auto min_element = priorityQueue.top();
         priorityQueue.pop();
-        T current_val = min_element.getCurrent();
-        *(output_base_ptr + write_offset) = current_val;
+
+        *(output_base_ptr + write_offset) = min_element.getCurrent();
         ++write_offset;
 
         min_element.increment();
         if (!min_element.atEnd()) {
             priorityQueue.push(min_element);
         }
+    }
+
+    for (size_t i = 0; i < free_list.size(); ++i) {
+        delete[] free_list[i];
     }
 
     return merged_output;

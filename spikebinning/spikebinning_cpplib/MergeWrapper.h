@@ -6,47 +6,43 @@
 #define RECONSTRUCTION_V2_MERGEWRAPPER_H
 
 #include <limits>
+#include <iostream>
 
 template<class T>
 struct MergeWrapper {
     T *base_ptr;
     int64_t dim0;
     int64_t curr_ix;
-    T priority;
 
 
     MergeWrapper<T>(T *ptr_, int64_t dim0_) : base_ptr(ptr_), dim0(dim0_), curr_ix(0) {
-        priority = -(*base_ptr);
-    };
+    }
 
     MergeWrapper<T>(T *ptr_, int64_t dim0_, int64_t curr_ix_) : base_ptr(ptr_), dim0(dim0_), curr_ix(curr_ix_) {
-        priority = -(*(base_ptr + curr_ix_));
-    };
+    }
 
-    T getCurrent() const {return -priority;}
-
-    bool atEnd() const {return curr_ix == dim0;}
-
-    void increment() {
-
-        ++curr_ix;
-
-        if (atEnd()) {
-            priority = std::numeric_limits<T>::min();
+    T priority() const {
+        if (!atEnd()) {
+            return -(*(base_ptr + curr_ix));
         } else {
-            priority = -(*(base_ptr + curr_ix));
+            return  std::numeric_limits<T>::min();
         }
     }
 
-    friend bool operator< (MergeWrapper<T> const& lhs, MergeWrapper<T> const& rhs) {
-        return lhs.priority < rhs.priority;
+    T getCurrent() const {return *(base_ptr + curr_ix);}
+
+    bool atEnd() const {return curr_ix >= dim0;}
+
+    void increment() {
+        ++curr_ix;
     }
+
 };
 
 template<class T>
 struct ComparePriority {
     bool operator()(MergeWrapper<T> const & p1, MergeWrapper<T> const & p2) {
-        return p1.priority < p2.priority;
+        return p1.priority() < p2.priority();
     }
 };
 
