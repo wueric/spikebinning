@@ -21,7 +21,11 @@ struct MergeWrapper {
     };
 
     T priority() const {
-        return -(*(base_ptr + curr_ix));
+        if (!atEnd()) {
+            return -(*(base_ptr + curr_ix));
+        } else {
+            return  std::numeric_limits<T>::min();
+        }
     }
 
     T getCurrent() const {return *(base_ptr + curr_ix);}
